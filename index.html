@@ -117,6 +117,7 @@
         }
         h2 { font-size: 0.95rem; margin: 0 0 10px 0; color: #aaaaaa; }
         
+        /* FIXED MOBILE LOG ITEM CONTAINER */
         .log-item {
             position: relative;
             background: rgba(255, 255, 255, 0.05);
@@ -125,37 +126,42 @@
             margin-bottom: 8px;
             font-size: 0.75rem;
             border-left: 4px solid #333;
+            display: flex;
+            flex-direction: column;
         }
         .log-high { border-left-color: #ff4757; }
         .log-mid { border-left-color: #ffa502; }
         .log-none { border-left-color: #00ff88; }
         .log-time { color: #777; font-size: 0.65rem; margin-top: 4px; }
-        .log-notes { color: #ddd; font-style: italic; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; }
+        .log-notes { color: #ddd; font-style: italic; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; padding-right: 60px; }
         
+        /* VISIBLE, EASY-TAP MOBILE DELETE BUTTON */
         .btn-delete {
             position: absolute;
-            top: 6px;
+            top: 50%;
+            transform: translateY(-50%);
             right: 8px;
-            background: none;
+            background: #ff4757;
             border: none;
-            color: #555;
-            font-size: 1rem;
+            color: white;
+            font-size: 0.7rem;
+            font-weight: bold;
             cursor: pointer;
-            padding: 0;
+            padding: 4px 8px;
+            border-radius: 4px;
             width: auto;
-            display: inline;
+            display: inline-block;
         }
-        .btn-delete:hover { color: #ff4757; }
+        .btn-delete:hover { background: #ff2233; }
 
         #canvas-container {
             width: 100vw;
             height: 100vh;
         }
 
-        /* MOBILE FIX RULES ENGINE */
         @media (max-width: 600px) {
             #canvas-container {
-                height: 50vh; /* Keeps the 3D model on the top half only */
+                height: 50vh;
             }
             #ui-container {
                 position: relative;
@@ -163,19 +169,19 @@
                 left: 0;
                 bottom: 0;
                 width: 100vw;
-                height: 50vh; /* Gives the interface the bottom half precisely */
+                height: 50vh;
                 max-height: 50vh;
                 border-radius: 20px 20px 0 0;
                 border: none;
                 box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
                 padding: 12px 15px;
-                overflow-y: auto; /* Allows scrolling inside the options panel if text builds up */
+                overflow-y: auto;
             }
             h1 { font-size: 1.1rem; }
             p { margin-bottom: 5px; font-size: 0.75rem; }
             .gender-selector { margin-bottom: 8px; }
             .btn-group { margin-top: 4px; margin-bottom: 8px; }
-            textarea { margin-top: 2px; margin-bottom: 8px; rows: 1 !important; }
+            textarea { margin-top: 2px; margin-bottom: 8px; }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -227,11 +233,14 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x121212);
 
-        const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight * (window.innerWidth <= 600 ? 0.5 : 1.0)), 0.1, 100);
+        // Frame bounding correction rules
+        const getCanvasHeight = () => window.innerWidth <= 600 ? window.innerHeight * 0.5 : window.innerHeight;
+
+        const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / getCanvasHeight(), 0.1, 100);
         cameraPerspective.position.set(0, 0, 8.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight * (window.innerWidth <= 600 ? 0.5 : 1.0));
+        renderer.setSize(window.innerWidth, getCanvasHeight());
         container.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(cameraPerspective, renderer.domElement);
@@ -350,11 +359,11 @@
         function handleInteraction(clientX, clientY) {
             const isMobile = window.innerWidth <= 600;
             if (!isMobile && clientX < 320) return; 
-            // Corrected responsive touch coordinates threshold mapping
-            if (isMobile && clientY > window.innerHeight * 0.50) return; 
+            if (isMobile && clientY > getCanvasHeight()) return; 
 
+            // FIXED TOUCH POSITION MATH: Maps the full screen X but maps Y explicitly to the 50vh top half viewport box
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(clientY / (window.innerHeight * (isMobile ? 0.5 : 1.0))) * 2 + 1;
+            mouse.y = -(clientY / getCanvasHeight()) * 2 + 1;
 
             raycaster.setFromCamera(mouse, cameraPerspective);
             const intersects = raycaster.intersectObjects(clickableSpheres);
@@ -430,8 +439,8 @@
                 const card = document.createElement('div');
                 card.className = `log-item ${borderClass}`;
                 card.innerHTML = `
-                    <button class="btn-delete" onclick="deleteLogItem(${item.id})">×</button>
-                    <div style="font-weight:bold; padding-right: 15px;">${item.location}</div>
+                    <button class="btn-delete" onclick="deleteLogItem(${item.id})">Delete</button>
+                    <div style="font-weight:bold; padding-right: 65px;">${item.location}</div>
                     <div>Intensity: ${labelText} (${item.level}/10)</div>
                     ${notesHTML}
                     <div class="log-time">${item.time}</div>
@@ -502,10 +511,9 @@
 
         window.addEventListener('resize', onWindowResize, false);
         function onWindowResize() {
-            const isMobile = window.innerWidth <= 600;
-            cameraPerspective.aspect = window.innerWidth / (window.innerHeight * (isMobile ? 0.5 : 1.0));
+            cameraPerspective.aspect = window.innerWidth / getCanvasHeight();
             cameraPerspective.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight * (isMobile ? 0.5 : 1.0));
+            renderer.setSize(window.innerWidth, getCanvasHeight());
         }
 
         renderUIHistory();
