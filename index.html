@@ -31,8 +31,37 @@
             box-sizing: border-box;
         }
         h1 { font-size: 1.2rem; margin: 0 0 5px 0; color: #e0e0e0; }
-        p { font-size: 0.8rem; color: #aaaaaa; margin: 0 0 15px 0; }
-        #selected-point { font-weight: bold; color: #00ff88; margin-bottom: 10px; }
+        p { font-size: 0.8rem; color: #aaaaaa; margin: 0 0 12px 0; }
+        
+        /* Silhouette Selector Styling */
+        .selector-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .gender-selector {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 15px;
+            background: rgba(0,0,0,0.2);
+            padding: 3px;
+            border-radius: 8px;
+        }
+        .gender-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #888;
+            padding: 6px 0;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .gender-btn.active {
+            background: #2c3e50;
+            color: #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        #selected-point { font-weight: bold; color: #00ff88; margin-bottom: 10px; font-size: 0.85rem; }
         #pain-panel {
             display: none;
             margin-top: 5px;
@@ -89,7 +118,6 @@
         }
         h2 { font-size: 0.95rem; margin: 0 0 10px 0; color: #aaaaaa; }
         
-        /* Log item styling with delete engine spacing */
         .log-item {
             position: relative;
             background: rgba(255, 255, 255, 0.05);
@@ -138,7 +166,7 @@
                 border-bottom: none;
                 box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
             }
-            p { margin-bottom: 8px; }
+            p { margin-bottom: 5px; }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -149,6 +177,14 @@
     <div id="ui-container">
         <h1>Fibro3D Pain Tracker</h1>
         <p>Tap a point to log symptoms.</p>
+        
+        <div class="selector-label">Model Type</div>
+        <div class="gender-selector">
+            <button id="gender-neutral" class="gender-btn active" onclick="switchModel('neutral')">Neutral</button>
+            <button id="gender-female" class="gender-btn" onclick="switchModel('female')">Female</button>
+            <button id="gender-male" class="gender-btn" onclick="switchModel('male')">Male</button>
+        </div>
+
         <div id="selected-point">Selected: None</div>
         
         <div id="pain-panel">
@@ -174,8 +210,8 @@
     <div id="canvas-container"></div>
 
     <script>
-        // Option 2 Engine: Core Persistent Data Layer Loaded from LocalStorage
         let reportDataLog = JSON.parse(localStorage.getItem('fibro_pain_logs')) || [];
+        let currentModelType = localStorage.getItem('fibro_model_type') || 'neutral';
 
         // --- 3D Scene Setup ---
         const container = document.getElementById('canvas-container');
@@ -205,15 +241,48 @@
         backLight.position.set(-5, -5, -7);
         scene.add(backLight);
 
-        // --- Humanoid Form Assembly ---
+        // --- Humanoid Form Assembly Group ---
         const bodyGroup = new THREE.Group();
+        // CUSTOMIZATION: Scaled the entire anatomy footprint down slightly (90% size)
+        bodyGroup.scale.set(0.9, 0.9, 0.9);
+        scene.add(bodyGroup);
+
         const bodyMat = new THREE.MeshStandardMaterial({ 
-            color: 0x34495e, transparent: true, opacity: 0.5, roughness: 0.4, metalness: 0.1
+            color: 0x2c3e50, transparent: true, opacity: 0.5, roughness: 0.4, metalness: 0.1
         });
-        
-        const upperTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 1.0, 16), bodyMat); upperTorso.position.y = 0.7; bodyGroup.add(upperTorso);
-        const shoulders = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.2, 16), bodyMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.y = 1.1; bodyGroup.add(shoulders);
-        const lowerTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 0.8, 16), bodyMat); lowerTorso.position.y = -0.1; bodyGroup.add(lowerTorso);
+
+        // Track subcomponents so we can remodel dimensions instantly
+        let upperTorsoMesh, shouldersMesh, lowerTorsoMesh;
+
+        function buildHumanoidFramework() {
+            // Remove previous anatomy frame meshes if switching models
+            if(upperTorsoMesh) bodyGroup.remove(upperTorsoMesh);
+            if(shouldersMesh) bodyGroup.remove(shouldersMesh);
+            if(lowerTorsoMesh) bodyGroup.remove(lowerTorsoMesh);
+
+            let topRad = 0.55, botRad = 0.45, shoulderW = 1.2, hipW = 0.5;
+
+            if(currentModelType === 'female') {
+                topRad = 0.48; botRad = 0.38; shoulderW = 1.0; hipW = 0.54; 
+            } else if(currentModelType === 'male') {
+                topRad = 0.62; botRad = 0.44; shoulderW = 1.35; hipW = 0.46;
+            }
+
+            upperTorsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(topRad, botRad, 1.0, 16), bodyMat);
+            upperTorsoMesh.position.y = 0.7;
+            bodyGroup.add(upperTorsoMesh);
+
+            shouldersMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, shoulderW, 16), bodyMat);
+            shouldersMesh.rotation.z = Math.PI / 2;
+            shouldersMesh.position.y = 1.1;
+            bodyGroup.add(shouldersMesh);
+
+            lowerTorsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(botRad, hipW, 0.8, 16), bodyMat);
+            lowerTorsoMesh.position.y = -0.1;
+            bodyGroup.add(lowerTorsoMesh);
+        }
+
+        // Static Structural Frame Assemblies
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.3, 16), bodyMat); neck.position.y = 1.3; bodyGroup.add(neck);
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), bodyMat); head.scale.set(1, 1.2, 1); head.position.y = 1.7; bodyGroup.add(head);
         const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 1.1, 12), bodyMat); leftArm.position.set(-0.7, 0.5, 0); bodyGroup.add(leftArm);
@@ -225,7 +294,8 @@
         const leftFoot = new THREE.Mesh(footGeo, bodyMat); leftFoot.position.set(-0.25, -2.4, 0.1); bodyGroup.add(leftFoot);
         const rightFoot = new THREE.Mesh(footGeo, bodyMat); rightFoot.position.set(0.25, -2.4, 0.1); bodyGroup.add(rightFoot);
 
-        scene.add(bodyGroup);
+        // Run framework builder
+        buildHumanoidFramework();
 
         // --- Nodes ---
         const tenderPointsData = [
@@ -242,7 +312,8 @@
         ];
 
         const clickableSpheres = [];
-        const sphereGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        // CUSTOMIZATION: Targets size returned to a compact, neat, and small profile (0.07)
+        const sphereGeo = new THREE.SphereGeometry(0.07, 16, 16);
 
         tenderPointsData.forEach(data => {
             const sphereMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00aa44, roughness: 0.2 });
@@ -252,6 +323,22 @@
             bodyGroup.add(sphere);
             clickableSpheres.push(sphere);
         });
+
+        // --- Model Selector Engine ---
+        window.switchModel = function(type) {
+            currentModelType = type;
+            localStorage.setItem('fibro_model_type', type);
+            
+            // Toggle active classes on selector elements
+            document.querySelectorAll('.gender-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`gender-${type}`).classList.add('active');
+            
+            buildHumanoidFramework();
+        }
+
+        // Set initial selector layout state on startup load
+        document.querySelectorAll('.gender-btn').forEach(btn => btn.classList.remove('active'));
+        setTimeout(() => { document.getElementById(`gender-${currentModelType}`).classList.add('active'); }, 10);
 
         // --- Interaction Rules ---
         const raycaster = new THREE.Raycaster();
@@ -276,7 +363,7 @@
                 document.getElementById('pain-panel').style.display = "block";
                 
                 clickableSpheres.forEach(s => s.scale.set(1,1,1));
-                selectedSphere.scale.set(1.5, 1.5, 1.5);
+                selectedSphere.scale.set(1.4, 1.4, 1.4);
                 
                 selectPainLevel(selectedSphere.userData.currentLevel);
                 document.getElementById('pain-notes').value = '';
@@ -294,14 +381,12 @@
             document.getElementById('btn-p10').style.color = level === 10 ? '#000' : '#ff4757';
         }
 
-        // --- LocalStorage Renderer Sync Engine ---
         function renderUIHistory() {
             const logContainer = document.getElementById('log-container');
             
             if(reportDataLog.length === 0) {
                 logContainer.innerHTML = `<div style="color: #666; font-size: 0.75rem; font-style: italic;">No logs yet today.</div>`;
                 document.getElementById('report-btn').style.display = "none";
-                // Reset colors back to standard neutral if empty
                 clickableSpheres.forEach(sphere => {
                     sphere.userData.currentLevel = 0;
                     sphere.material.color.setHex(0x00ff88);
@@ -313,7 +398,6 @@
             document.getElementById('report-btn').style.display = "block";
             logContainer.innerHTML = '';
 
-            // Update 3D nodes based on current raw logs data snapshot
             clickableSpheres.forEach(sphere => {
                 const nodeLogs = reportDataLog.filter(l => l.location === sphere.userData.name);
                 if(nodeLogs.length > 0) {
@@ -329,7 +413,6 @@
                 }
             });
 
-            // Loop and draw list cards backwards so newest sits on top
             for(let i = reportDataLog.length - 1; i >= 0; i--) {
                 const item = reportDataLog[i];
                 let borderClass = 'log-none';
@@ -362,7 +445,7 @@
             const now = new Date();
 
             const entry = {
-                id: Date.now(), // unique stamp used as index tag for targeting deletions safely
+                id: Date.now(), 
                 date: now.toLocaleDateString(),
                 time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 location: selectedSphere.userData.name,
@@ -371,13 +454,12 @@
             };
 
             reportDataLog.push(entry);
-            localStorage.setItem('fibro_pain_logs', JSON.stringify(reportDataLog)); // Save immediately
+            localStorage.setItem('fibro_pain_logs', JSON.stringify(reportDataLog)); 
             
             renderUIHistory();
             document.getElementById('pain-notes').value = '';
         }
 
-        // Option 1 Engine: Single card target execution removal feature
         window.deleteLogItem = function(targetId) {
             reportDataLog = reportDataLog.filter(item => item.id !== targetId);
             localStorage.setItem('fibro_pain_logs', JSON.stringify(reportDataLog));
@@ -423,7 +505,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Initial launch configuration boot trigger
         renderUIHistory();
         animate();
     </script>
