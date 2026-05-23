@@ -321,16 +321,29 @@
             { name: "Foot / Ankle (Left)", x: -0.25, y: -2.35, z: 0.25 }, { name: "Foot / Ankle (Right)", x: 0.25, y: -2.35, z: 0.25 }
         ];
 
-        const clickableSpheres = [];
+        const visibleSpheres = [];
+        const touchHitboxes = [];
+        
         const sphereGeo = new THREE.SphereGeometry(0.07, 16, 16);
+        // TOUCH ENHANCEMENT MATH: Creating a large 3D hitbox mesh that is completely transparent to the eye
+        const hitboxGeo = new THREE.SphereGeometry(0.35, 8, 8); 
+        const invisibleMat = new THREE.MeshBasicMaterial({ visible: false });
 
         tenderPointsData.forEach(data => {
+            // Visual element
             const sphereMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00aa44, roughness: 0.2 });
             const sphere = new THREE.Mesh(sphereGeo, sphereMat);
             sphere.position.set(data.x, data.y, data.z);
             sphere.userData = { name: data.name, currentLevel: 0 };
             bodyGroup.add(sphere);
-            clickableSpheres.push(sphere);
+            visibleSpheres.push(sphere);
+
+            // Large touch helper bound to the visual element
+            const hitbox = new THREE.Mesh(hitboxGeo, invisibleMat);
+            hitbox.position.set(data.x, data.y, data.z);
+            hitbox.userData = { visualNode: sphere }; 
+            bodyGroup.add(hitbox);
+            touchHitboxes.push(hitbox);
         });
 
         // --- Model Selector Engine ---
@@ -362,14 +375,17 @@
             mouse.y = -(clientY / getCanvasHeight()) * 2 + 1;
 
             raycaster.setFromCamera(mouse, cameraPerspective);
-            const intersects = raycaster.intersectObjects(clickableSpheres);
+            // INTERACTION ENGINE RECALIBRATION: Target the massive invisible hitboxes instead of tiny visual shapes
+            const intersects = raycaster.intersectObjects(touchHitboxes);
 
             if (intersects.length > 0) {
-                selectedSphere = intersects[0].object;
+                // Instantly trace the click from the large hitbox back to its real visual node marker
+                selectedSphere = intersects[0].object.userData.visualNode;
+                
                 document.getElementById('selected-point').innerText = selectedSphere.userData.name;
                 document.getElementById('pain-panel').style.display = "block";
                 
-                clickableSpheres.forEach(s => s.scale.set(1,1,1));
+                visibleSpheres.forEach(s => s.scale.set(1,1,1));
                 selectedSphere.scale.set(1.4, 1.4, 1.4);
                 
                 selectPainLevel(selectedSphere.userData.currentLevel);
@@ -394,7 +410,7 @@
             if(reportDataLog.length === 0) {
                 logContainer.innerHTML = `<div style="color: #666; font-size: 0.75rem; font-style: italic;">No logs yet today.</div>`;
                 document.getElementById('report-btn').style.display = "none";
-                clickableSpheres.forEach(sphere => {
+                visibleSpheres.forEach(sphere => {
                     sphere.userData.currentLevel = 0;
                     sphere.material.color.setHex(0x00ff88);
                     sphere.material.emissive.setHex(0x00aa44);
@@ -405,7 +421,7 @@
             document.getElementById('report-btn').style.display = "block";
             logContainer.innerHTML = '';
 
-            clickableSpheres.forEach(sphere => {
+            visibleSpheres.forEach(sphere => {
                 const nodeLogs = reportDataLog.filter(l => l.location === sphere.userData.name);
                 if(nodeLogs.length > 0) {
                     const latestLevel = nodeLogs[nodeLogs.length - 1].level;
@@ -515,8 +531,6 @@
         renderUIHistory();
         animate();
 
-        // --- AUTOMATIC MOBILE REFRESH RULES ENGINE ---
-        // Automatically reloads the visual application instance whenever the tab becomes visible again
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'visible') {
                 window.location.reload();
