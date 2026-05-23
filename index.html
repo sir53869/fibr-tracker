@@ -33,7 +33,6 @@
         h1 { font-size: 1.2rem; margin: 0 0 5px 0; color: #e0e0e0; }
         p { font-size: 0.8rem; color: #aaaaaa; margin: 0 0 12px 0; }
         
-        /* Silhouette Selector Styling */
         .selector-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
         .gender-selector {
             display: flex;
@@ -153,26 +152,38 @@
             height: 100vh;
         }
 
+        /* MOBILE FIX RULES ENGINE */
         @media (max-width: 600px) {
+            #canvas-container {
+                height: 50vh; /* Keeps the 3D model on the top half only */
+            }
             #ui-container {
+                position: relative;
                 top: auto;
                 left: 0;
                 bottom: 0;
                 width: 100vw;
-                max-height: 45vh;
+                height: 50vh; /* Gives the interface the bottom half precisely */
+                max-height: 50vh;
                 border-radius: 20px 20px 0 0;
-                border-left: none;
-                border-right: none;
-                border-bottom: none;
+                border: none;
                 box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+                padding: 12px 15px;
+                overflow-y: auto; /* Allows scrolling inside the options panel if text builds up */
             }
-            p { margin-bottom: 5px; }
+            h1 { font-size: 1.1rem; }
+            p { margin-bottom: 5px; font-size: 0.75rem; }
+            .gender-selector { margin-bottom: 8px; }
+            .btn-group { margin-top: 4px; margin-bottom: 8px; }
+            textarea { margin-top: 2px; margin-bottom: 8px; rows: 1 !important; }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+
+    <div id="canvas-container"></div>
 
     <div id="ui-container">
         <h1>Fibro3D Pain Tracker</h1>
@@ -193,7 +204,7 @@
                 <button id="btn-p5" onclick="selectPainLevel(5)" style="color: #ffa502;">Mid</button>
                 <button id="btn-p10" onclick="selectPainLevel(10)" style="color: #ff4757;">High</button>
             </div>
-            <textarea id="pain-notes" rows="2" placeholder="Triggers or notes..."></textarea>
+            <textarea id="pain-notes" rows="1" placeholder="Triggers or notes..."></textarea>
             <button class="btn-save" onclick="saveToLog()">Save to Pain Log</button>
         </div>
 
@@ -207,8 +218,6 @@
         </div>
     </div>
 
-    <div id="canvas-container"></div>
-
     <script>
         let reportDataLog = JSON.parse(localStorage.getItem('fibro_pain_logs')) || [];
         let currentModelType = localStorage.getItem('fibro_model_type') || 'neutral';
@@ -218,11 +227,11 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x121212);
 
-        const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / (window.innerHeight * (window.innerWidth <= 600 ? 0.5 : 1.0)), 0.1, 100);
         cameraPerspective.position.set(0, 0, 8.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(window.innerWidth, window.innerHeight * (window.innerWidth <= 600 ? 0.5 : 1.0));
         container.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(cameraPerspective, renderer.domElement);
@@ -241,9 +250,8 @@
         backLight.position.set(-5, -5, -7);
         scene.add(backLight);
 
-        // --- Humanoid Form Assembly Group ---
+        // --- Humanoid Form Assembly ---
         const bodyGroup = new THREE.Group();
-        // CUSTOMIZATION: Scaled the entire anatomy footprint down slightly (90% size)
         bodyGroup.scale.set(0.9, 0.9, 0.9);
         scene.add(bodyGroup);
 
@@ -251,11 +259,9 @@
             color: 0x2c3e50, transparent: true, opacity: 0.5, roughness: 0.4, metalness: 0.1
         });
 
-        // Track subcomponents so we can remodel dimensions instantly
         let upperTorsoMesh, shouldersMesh, lowerTorsoMesh;
 
         function buildHumanoidFramework() {
-            // Remove previous anatomy frame meshes if switching models
             if(upperTorsoMesh) bodyGroup.remove(upperTorsoMesh);
             if(shouldersMesh) bodyGroup.remove(shouldersMesh);
             if(lowerTorsoMesh) bodyGroup.remove(lowerTorsoMesh);
@@ -282,7 +288,6 @@
             bodyGroup.add(lowerTorsoMesh);
         }
 
-        // Static Structural Frame Assemblies
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.3, 16), bodyMat); neck.position.y = 1.3; bodyGroup.add(neck);
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), bodyMat); head.scale.set(1, 1.2, 1); head.position.y = 1.7; bodyGroup.add(head);
         const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 1.1, 12), bodyMat); leftArm.position.set(-0.7, 0.5, 0); bodyGroup.add(leftArm);
@@ -294,7 +299,6 @@
         const leftFoot = new THREE.Mesh(footGeo, bodyMat); leftFoot.position.set(-0.25, -2.4, 0.1); bodyGroup.add(leftFoot);
         const rightFoot = new THREE.Mesh(footGeo, bodyMat); rightFoot.position.set(0.25, -2.4, 0.1); bodyGroup.add(rightFoot);
 
-        // Run framework builder
         buildHumanoidFramework();
 
         // --- Nodes ---
@@ -312,7 +316,6 @@
         ];
 
         const clickableSpheres = [];
-        // CUSTOMIZATION: Targets size returned to a compact, neat, and small profile (0.07)
         const sphereGeo = new THREE.SphereGeometry(0.07, 16, 16);
 
         tenderPointsData.forEach(data => {
@@ -329,14 +332,12 @@
             currentModelType = type;
             localStorage.setItem('fibro_model_type', type);
             
-            // Toggle active classes on selector elements
             document.querySelectorAll('.gender-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`gender-${type}`).classList.add('active');
             
             buildHumanoidFramework();
         }
 
-        // Set initial selector layout state on startup load
         document.querySelectorAll('.gender-btn').forEach(btn => btn.classList.remove('active'));
         setTimeout(() => { document.getElementById(`gender-${currentModelType}`).classList.add('active'); }, 10);
 
@@ -349,10 +350,11 @@
         function handleInteraction(clientX, clientY) {
             const isMobile = window.innerWidth <= 600;
             if (!isMobile && clientX < 320) return; 
-            if (isMobile && clientY > window.innerHeight * 0.55) return; 
+            // Corrected responsive touch coordinates threshold mapping
+            if (isMobile && clientY > window.innerHeight * 0.50) return; 
 
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+            mouse.y = -(clientY / (window.innerHeight * (isMobile ? 0.5 : 1.0))) * 2 + 1;
 
             raycaster.setFromCamera(mouse, cameraPerspective);
             const intersects = raycaster.intersectObjects(clickableSpheres);
@@ -500,9 +502,10 @@
 
         window.addEventListener('resize', onWindowResize, false);
         function onWindowResize() {
-            cameraPerspective.aspect = window.innerWidth / window.innerHeight;
+            const isMobile = window.innerWidth <= 600;
+            cameraPerspective.aspect = window.innerWidth / (window.innerHeight * (isMobile ? 0.5 : 1.0));
             cameraPerspective.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(window.innerWidth, window.innerHeight * (isMobile ? 0.5 : 1.0));
         }
 
         renderUIHistory();
