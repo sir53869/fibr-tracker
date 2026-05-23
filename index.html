@@ -117,7 +117,6 @@
         }
         h2 { font-size: 0.95rem; margin: 0 0 10px 0; color: #aaaaaa; }
         
-        /* FIXED MOBILE LOG ITEM CONTAINER */
         .log-item {
             position: relative;
             background: rgba(255, 255, 255, 0.05);
@@ -135,7 +134,6 @@
         .log-time { color: #777; font-size: 0.65rem; margin-top: 4px; }
         .log-notes { color: #ddd; font-style: italic; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; padding-right: 60px; }
         
-        /* VISIBLE, EASY-TAP MOBILE DELETE BUTTON */
         .btn-delete {
             position: absolute;
             top: 50%;
@@ -233,7 +231,6 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x121212);
 
-        // Frame bounding correction rules
         const getCanvasHeight = () => window.innerWidth <= 600 ? window.innerHeight * 0.5 : window.innerHeight;
 
         const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / getCanvasHeight(), 0.1, 100);
@@ -361,7 +358,6 @@
             if (!isMobile && clientX < 320) return; 
             if (isMobile && clientY > getCanvasHeight()) return; 
 
-            // FIXED TOUCH POSITION MATH: Maps the full screen X but maps Y explicitly to the 50vh top half viewport box
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(clientY / getCanvasHeight()) * 2 + 1;
 
@@ -518,6 +514,14 @@
 
         renderUIHistory();
         animate();
+
+        // --- AUTOMATIC MOBILE REFRESH RULES ENGINE ---
+        // Automatically reloads the visual application instance whenever the tab becomes visible again
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                window.location.reload();
+            }
+        });
     </script>
 </body>
 </html>
