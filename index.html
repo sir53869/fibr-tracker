@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fibromyalgia 3D Pain Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(30, 30, 30, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 280px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+        h1 { font-size: 1.2rem; margin: 0 0 5px 0; color: #e0e0e0; }
+        p { font-size: 0.8rem; color: #aaaaaa; margin: 0 0 15px 0; }
+        #selected-point { font-weight: bold; color: #00ff88; margin-bottom: 10px; }
+        #pain-panel {
+            display: none;
+            margin-top: 5px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            padding-top: 10px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+            margin-bottom: 12px;
+        }
+        button {
+            flex: 1;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        button:hover { background: #444; }
+        
+        textarea {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            padding: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 0.8rem;
+            resize: none;
+            margin-top: 5px;
+            margin-bottom: 12px;
+        }
+        textarea:focus { outline: none; border-color: #007acc; }
+
+        .btn-save { background: #007acc; border: none; width: 100%; font-weight: bold; margin-bottom: 8px; }
+        .btn-save:hover { background: #0098ff; }
+        
+        .btn-report { background: #2ed573; border: none; width: 100%; font-weight: bold; color: #121212; margin-bottom: 10px; display: none; }
+        .btn-report:hover { background: #2bcb67; }
+        
+        #history-section {
+            margin-top: 5px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            padding-top: 15px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        h2 { font-size: 0.95rem; margin: 0 0 10px 0; color: #aaaaaa; }
+        
+        /* Log item styling with delete engine spacing */
+        .log-item {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.75rem;
+            border-left: 4px solid #333;
+        }
+        .log-high { border-left-color: #ff4757; }
+        .log-mid { border-left-color: #ffa502; }
+        .log-none { border-left-color: #00ff88; }
+        .log-time { color: #777; font-size: 0.65rem; margin-top: 4px; }
+        .log-notes { color: #ddd; font-style: italic; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; }
+        
+        .btn-delete {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #555;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0;
+            width: auto;
+            display: inline;
+        }
+        .btn-delete:hover { color: #ff4757; }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        @media (max-width: 600px) {
+            #ui-container {
+                top: auto;
+                left: 0;
+                bottom: 0;
+                width: 100vw;
+                max-height: 45vh;
+                border-radius: 20px 20px 0 0;
+                border-left: none;
+                border-right: none;
+                border-bottom: none;
+                box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+            }
+            p { margin-bottom: 8px; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h1>Fibro3D Pain Tracker</h1>
+        <p>Tap a point to log symptoms.</p>
+        <div id="selected-point">Selected: None</div>
+        
+        <div id="pain-panel">
+            <div class="btn-group">
+                <button id="btn-p0" onclick="selectPainLevel(0)">None</button>
+                <button id="btn-p5" onclick="selectPainLevel(5)" style="color: #ffa502;">Mid</button>
+                <button id="btn-p10" onclick="selectPainLevel(10)" style="color: #ff4757;">High</button>
+            </div>
+            <textarea id="pain-notes" rows="2" placeholder="Triggers or notes..."></textarea>
+            <button class="btn-save" onclick="saveToLog()">Save to Pain Log</button>
+        </div>
+
+        <button id="report-btn" class="btn-report" onclick="downloadReport()">Download Medical Report</button>
+
+        <div id="history-section">
+            <h2>Activity History</h2>
+            <div id="log-container">
+                <div style="color: #666; font-size: 0.75rem; font-style: italic;">No logs yet today.</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // Option 2 Engine: Core Persistent Data Layer Loaded from LocalStorage
+        let reportDataLog = JSON.parse(localStorage.getItem('fibro_pain_logs')) || [];
+
+        // --- 3D Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121212);
+
+        const cameraPerspective = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        cameraPerspective.position.set(0, 0, 8.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(cameraPerspective, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, -0.2, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.3;
+
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+        
+        const backLight = new THREE.DirectionalLight(0x3b5998, 0.5);
+        backLight.position.set(-5, -5, -7);
+        scene.add(backLight);
+
+        // --- Humanoid Form Assembly ---
+        const bodyGroup = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({ 
+            color: 0x34495e, transparent: true, opacity: 0.5, roughness: 0.4, metalness: 0.1
+        });
+        
+        const upperTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 1.0, 16), bodyMat); upperTorso.position.y = 0.7; bodyGroup.add(upperTorso);
+        const shoulders = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.2, 16), bodyMat); shoulders.rotation.z = Math.PI / 2; shoulders.position.y = 1.1; bodyGroup.add(shoulders);
+        const lowerTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 0.8, 16), bodyMat); lowerTorso.position.y = -0.1; bodyGroup.add(lowerTorso);
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.3, 16), bodyMat); neck.position.y = 1.3; bodyGroup.add(neck);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), bodyMat); head.scale.set(1, 1.2, 1); head.position.y = 1.7; bodyGroup.add(head);
+        const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 1.1, 12), bodyMat); leftArm.position.set(-0.7, 0.5, 0); bodyGroup.add(leftArm);
+        const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 1.1, 12), bodyMat); rightArm.position.set(0.7, 0.5, 0); bodyGroup.add(rightArm);
+        const leftLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.14, 2.0, 12), bodyMat); leftLeg.position.set(-0.25, -1.4, 0); bodyGroup.add(leftLeg);
+        const rightLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.14, 2.0, 12), bodyMat); rightLeg.position.set(0.25, -1.4, 0); bodyGroup.add(rightLeg);
+        
+        const footGeo = new THREE.BoxGeometry(0.22, 0.15, 0.45);
+        const leftFoot = new THREE.Mesh(footGeo, bodyMat); leftFoot.position.set(-0.25, -2.4, 0.1); bodyGroup.add(leftFoot);
+        const rightFoot = new THREE.Mesh(footGeo, bodyMat); rightFoot.position.set(0.25, -2.4, 0.1); bodyGroup.add(rightFoot);
+
+        scene.add(bodyGroup);
+
+        // --- Nodes ---
+        const tenderPointsData = [
+            { name: "Lower Neck (Front Left)", x: -0.18, y: 1.3, z: 0.22 }, { name: "Lower Neck (Front Right)", x: 0.18, y: 1.3, z: 0.22 },
+            { name: "Second Rib / Chest (Left)", x: -0.3, y: 0.85, z: 0.45 }, { name: "Second Rib / Chest (Right)", x: 0.3, y: 0.85, z: 0.45 },
+            { name: "Inside Elbow (Left)", x: -0.7, y: 0.1, z: 0.15 }, { name: "Inside Elbow (Right)", x: 0.7, y: 0.1, z: 0.15 },
+            { name: "Inside Knee (Left)", x: -0.2, y: -1.2, z: 0.2 }, { name: "Inside Knee (Right)", x: 0.2, y: -1.2, z: 0.2 },
+            { name: "Occiput / Base of Skull (Left)", x: -0.15, y: 1.5, z: -0.3 }, { name: "Occiput / Base of Skull (Right)", x: 0.15, y: 1.5, z: -0.3 },
+            { name: "Trapezius / Mid-Shoulder (Left)", x: -0.4, y: 1.1, z: -0.2 }, { name: "Trapezius / Mid-Shoulder (Right)", x: 0.4, y: 1.1, z: -0.2 },
+            { name: "Supraspinatus / Upper Back (Left)", x: -0.3, y: 0.9, z: -0.4 }, { name: "Supraspinatus / Upper Back (Right)", x: 0.3, y: 0.9, z: -0.4 },
+            { name: "Gluteal / Upper Buttock (Left)", x: -0.3, y: -0.3, z: -0.45 }, { name: "Gluteal / Upper Buttock (Right)", x: 0.3, y: -0.3, z: -0.45 },
+            { name: "Greater Trochanter / Hip (Left)", x: -0.55, y: -0.35, z: -0.1 }, { name: "Greater Trochanter / Hip (Right)", x: 0.55, y: -0.35, z: -0.1 },
+            { name: "Foot / Ankle (Left)", x: -0.25, y: -2.35, z: 0.25 }, { name: "Foot / Ankle (Right)", x: 0.25, y: -2.35, z: 0.25 }
+        ];
+
+        const clickableSpheres = [];
+        const sphereGeo = new THREE.SphereGeometry(0.08, 16, 16);
+
+        tenderPointsData.forEach(data => {
+            const sphereMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x00aa44, roughness: 0.2 });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            sphere.position.set(data.x, data.y, data.z);
+            sphere.userData = { name: data.name, currentLevel: 0 };
+            bodyGroup.add(sphere);
+            clickableSpheres.push(sphere);
+        });
+
+        // --- Interaction Rules ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedSphere = null;
+        let activeTempLevel = 0;
+
+        function handleInteraction(clientX, clientY) {
+            const isMobile = window.innerWidth <= 600;
+            if (!isMobile && clientX < 320) return; 
+            if (isMobile && clientY > window.innerHeight * 0.55) return; 
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, cameraPerspective);
+            const intersects = raycaster.intersectObjects(clickableSpheres);
+
+            if (intersects.length > 0) {
+                selectedSphere = intersects[0].object;
+                document.getElementById('selected-point').innerText = selectedSphere.userData.name;
+                document.getElementById('pain-panel').style.display = "block";
+                
+                clickableSpheres.forEach(s => s.scale.set(1,1,1));
+                selectedSphere.scale.set(1.5, 1.5, 1.5);
+                
+                selectPainLevel(selectedSphere.userData.currentLevel);
+                document.getElementById('pain-notes').value = '';
+            }
+        }
+
+        window.addEventListener('pointerdown', (e) => handleInteraction(e.clientX, e.clientY));
+
+        window.selectPainLevel = function(level) {
+            activeTempLevel = level;
+            document.getElementById('btn-p0').style.background = level === 0 ? '#555' : '#333';
+            document.getElementById('btn-p5').style.background = level === 5 ? '#ffa502' : '#333';
+            document.getElementById('btn-p5').style.color = level === 5 ? '#000' : '#ffa502';
+            document.getElementById('btn-p10').style.background = level === 10 ? '#ff4757' : '#333';
+            document.getElementById('btn-p10').style.color = level === 10 ? '#000' : '#ff4757';
+        }
+
+        // --- LocalStorage Renderer Sync Engine ---
+        function renderUIHistory() {
+            const logContainer = document.getElementById('log-container');
+            
+            if(reportDataLog.length === 0) {
+                logContainer.innerHTML = `<div style="color: #666; font-size: 0.75rem; font-style: italic;">No logs yet today.</div>`;
+                document.getElementById('report-btn').style.display = "none";
+                // Reset colors back to standard neutral if empty
+                clickableSpheres.forEach(sphere => {
+                    sphere.userData.currentLevel = 0;
+                    sphere.material.color.setHex(0x00ff88);
+                    sphere.material.emissive.setHex(0x00aa44);
+                });
+                return;
+            }
+
+            document.getElementById('report-btn').style.display = "block";
+            logContainer.innerHTML = '';
+
+            // Update 3D nodes based on current raw logs data snapshot
+            clickableSpheres.forEach(sphere => {
+                const nodeLogs = reportDataLog.filter(l => l.location === sphere.userData.name);
+                if(nodeLogs.length > 0) {
+                    const latestLevel = nodeLogs[nodeLogs.length - 1].level;
+                    sphere.userData.currentLevel = latestLevel;
+                    if (latestLevel === 0) { sphere.material.color.setHex(0x00ff88); sphere.material.emissive.setHex(0x00aa44); }
+                    else if (latestLevel === 5) { sphere.material.color.setHex(0xffa500); sphere.material.emissive.setHex(0xb37400); }
+                    else if (latestLevel === 10) { sphere.material.color.setHex(0xff4757); sphere.material.emissive.setHex(0xff0000); }
+                } else {
+                    sphere.userData.currentLevel = 0;
+                    sphere.material.color.setHex(0x00ff88);
+                    sphere.material.emissive.setHex(0x00aa44);
+                }
+            });
+
+            // Loop and draw list cards backwards so newest sits on top
+            for(let i = reportDataLog.length - 1; i >= 0; i--) {
+                const item = reportDataLog[i];
+                let borderClass = 'log-none';
+                let labelText = 'Mild/None';
+                if(item.level === 5) { borderClass = 'log-mid'; labelText = 'Moderate'; }
+                if(item.level === 10) { borderClass = 'log-high'; labelText = 'Severe'; }
+
+                let notesHTML = '';
+                if(item.note && item.note !== "No context noted.") { 
+                    notesHTML = `<div class="log-notes">Note: "${item.note}"</div>`; 
+                }
+
+                const card = document.createElement('div');
+                card.className = `log-item ${borderClass}`;
+                card.innerHTML = `
+                    <button class="btn-delete" onclick="deleteLogItem(${item.id})">×</button>
+                    <div style="font-weight:bold; padding-right: 15px;">${item.location}</div>
+                    <div>Intensity: ${labelText} (${item.level}/10)</div>
+                    ${notesHTML}
+                    <div class="log-time">${item.time}</div>
+                `;
+                logContainer.appendChild(card);
+            }
+        }
+
+        window.saveToLog = function() {
+            if (!selectedSphere) return;
+            
+            const notesText = document.getElementById('pain-notes').value.trim();
+            const now = new Date();
+
+            const entry = {
+                id: Date.now(), // unique stamp used as index tag for targeting deletions safely
+                date: now.toLocaleDateString(),
+                time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                location: selectedSphere.userData.name,
+                level: activeTempLevel,
+                note: notesText || "No context noted."
+            };
+
+            reportDataLog.push(entry);
+            localStorage.setItem('fibro_pain_logs', JSON.stringify(reportDataLog)); // Save immediately
+            
+            renderUIHistory();
+            document.getElementById('pain-notes').value = '';
+        }
+
+        // Option 1 Engine: Single card target execution removal feature
+        window.deleteLogItem = function(targetId) {
+            reportDataLog = reportDataLog.filter(item => item.id !== targetId);
+            localStorage.setItem('fibro_pain_logs', JSON.stringify(reportDataLog));
+            renderUIHistory();
+        }
+
+        window.downloadReport = function() {
+            if (reportDataLog.length === 0) return;
+
+            let reportText = `=========================================\n`;
+            reportText += `       FIBROMYALGIA PAIN TRACKER REPORT  \n`;
+            reportText += `       Generated: ${new Date().toLocaleString()}\n`;
+            reportText += `=========================================\n\n`;
+
+            reportDataLog.forEach((item, index) => {
+                reportText += `[Entry #${index + 1}] — ${item.date} @ ${item.time}\n`;
+                reportText += `• Location : ${item.location}\n`;
+                reportText += `• Intensity: ${item.level}/10\n`;
+                reportText += `• Patient Notes: ${item.note}\n`;
+                reportText += `-----------------------------------------\n`;
+            });
+
+            const blob = new Blob([reportText], { type: 'text/plain' });
+            const tempLink = document.createElement('a');
+            tempLink.download = `Fibro3D_Pain_Report.txt`;
+            tempLink.href = window.URL.createObjectURL(blob);
+            tempLink.style.display = 'none';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, cameraPerspective);
+        }
+
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            cameraPerspective.aspect = window.innerWidth / window.innerHeight;
+            cameraPerspective.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initial launch configuration boot trigger
+        renderUIHistory();
+        animate();
+    </script>
+</body>
+</html>
